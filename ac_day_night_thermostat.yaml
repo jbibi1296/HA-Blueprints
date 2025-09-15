@@ -154,7 +154,7 @@ action:
       - conditions:
           - condition: numeric_state
             entity_id: !input temperature_sensor
-            above: "{{ temperature_high }}"
+            above: "{{ temperature_high | float }}"
           - condition: time
             after: !input day_time_start
             before: !input day_time_end
@@ -166,7 +166,7 @@ action:
       - conditions:
           - condition: numeric_state
             entity_id: !input temperature_sensor
-            below: "{{ temperature_low }}"
+            below: "{{ temperature_low | float }}"
           - condition: time
             after: !input day_time_start
             before: !input day_time_end
@@ -178,7 +178,7 @@ action:
       - conditions:
           - condition: numeric_state
             entity_id: !input temperature_sensor
-            above: "{{ temperature_high }}"
+            above: "{{ temperature_high | float }}"
           - condition: time
             after: !input night_time_start
             before: !input night_time_end
@@ -190,7 +190,7 @@ action:
       - conditions:
           - condition: numeric_state
             entity_id: !input temperature_sensor
-            below: "{{ temperature_low }}"
+            below: "{{ temperature_low | float }}"
           - condition: time
             after: !input night_time_start
             before: !input night_time_end
@@ -198,3 +198,4 @@ action:
           - service: switch.turn_off
             target:
               entity_id: !input ac_outlet
+
