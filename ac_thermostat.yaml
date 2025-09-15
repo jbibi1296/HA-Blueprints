@@ -1,0 +1,122 @@
+blueprint:
+  name: AC Thermostat
+  description: Automatically controls an AC unit based on a temperature sensor, a specified temperature range, time window, and days of the week.
+  domain: automation
+  source_url: https://gist.github.com/yourusername/somehash
+
+  input:
+    temperature_sensor:
+      name: Temperature Sensor
+      description: The temperature sensor entity to monitor.
+      selector:
+        entity:
+          domain: sensor
+          device_class: temperature
+    
+    ac_outlet:
+      name: AC Outlet
+      description: The outlet entity connected to the AC unit.
+      selector:
+        entity:
+          domain: switch
+          device_class: outlet
+
+    temperature_high:
+      name: Turn on temperature
+      description: Temperature (in your system's unit) to turn on the AC.
+      default: 75
+      selector:
+        number:
+          min: 60
+          max: 90
+          step: 1
+          unit_of_measurement: "°F" # or °C depending on your system
+          mode: box
+          
+    temperature_low:
+      name: Turn off temperature
+      description: Temperature (in your system's unit) to turn off the AC.
+      default: 72
+      selector:
+        number:
+          min: 60
+          max: 90
+          step: 1
+          unit_of_measurement: "°F" # or °C depending on your system
+          mode: box
+
+    time_start:
+      name: Start Time
+      description: The time of day to begin the automation.
+      selector:
+        time:
+
+    time_end:
+      name: End Time
+      description: The time of day to end the automation.
+      selector:
+        time:
+
+    days_of_week:
+      name: Days of the week
+      description: The days to run the automation.
+      selector:
+        select:
+          multiple: true
+          options:
+            - label: Monday
+              value: mon
+            - label: Tuesday
+              value: tue
+            - label: Wednesday
+              value: wed
+            - label: Thursday
+              value: thu
+            - label: Friday
+              value: fri
+            - label: Saturday
+              value: sat
+            - label: Sunday
+              value: sun
+
+variables:
+  ac_outlet: !input ac_outlet
+  temperature_sensor: !input temperature_sensor
+  temperature_high: !input temperature_high
+  temperature_low: !input temperature_low
+  time_start: !input time_start
+  time_end: !input time_end
+  days_of_week: !input days_of_week
+
+trigger:
+  - platform: state
+    entity_id: !input temperature_sensor
+
+condition:
+  - condition: time
+    before: !input time_end
+    after: !input time_start
+  - condition: time
+    weekday: !input days_of_week
+  - condition: numeric_state
+    entity_id: !input temperature_sensor
+    above: !input temperature_high
+    
+action:
+  - choose:
+      - conditions:
+          - condition: numeric_state
+            entity_id: !input temperature_sensor
+            above: !input temperature_high
+        sequence:
+          - service: switch.turn_on
+            target:
+              entity_id: !input ac_outlet
+      - conditions:
+          - condition: numeric_state
+            entity_id: !input temperature_sensor
+            below: !input temperature_low
+        sequence:
+          - service: switch.turn_off
+            target:
+              entity_id: !input ac_outlet
