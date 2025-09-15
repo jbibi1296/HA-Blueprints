@@ -1,6 +1,6 @@
 blueprint:
   name: AC Thermostat with Day/Night Modes
-  description: Automatically controls an AC unit based on a temperature sensor, with separate day and night schedules for time and temperature.
+  description: Automatically controls an AC unit based on a temperature sensor, with separate day and night schedules that correctly handle midnight crossovers.
   domain: automation
   source_url: https://gist.github.com/yourusername/somehash
 
@@ -122,21 +122,14 @@ variables:
   ac_outlet: !input ac_outlet
   temperature_sensor: !input temperature_sensor
   days_of_week: !input days_of_week
-  
-  # The following variables will be dynamically set based on the time of day
-  temperature_high: >-
-    {% if now().strftime('%H:%M') > states('input_datetime.dummy_night_start') and now().strftime('%H:%M') < states('input_datetime.dummy_night_end') %}
-      {{ states('input_number.dummy_night_high') }}
-    {% else %}
-      {{ states('input_number.dummy_day_high') }}
-    {% endif %}
-    
-  temperature_low: >-
-    {% if now().strftime('%H:%M') > states('input_datetime.dummy_night_start') and now().strftime('%H:%M') < states('input_datetime.dummy_night_end') %}
-      {{ states('input_number.dummy_night_low') }}
-    {% else %}
-      {{ states('input_number.dummy_day_low') }}
-    {% endif %}
+  day_time_start: !input day_time_start
+  day_time_end: !input day_time_end
+  night_time_start: !input night_time_start
+  night_time_end: !input night_time_end
+  day_temperature_high: !input day_temperature_high
+  day_temperature_low: !input day_temperature_low
+  night_temperature_high: !input night_temperature_high
+  night_temperature_low: !input night_temperature_low
 
 trigger:
   - platform: state
@@ -145,57 +138,65 @@ trigger:
 condition:
   - condition: time
     weekday: !input days_of_week
-  - condition: numeric_state
-    entity_id: !input temperature_sensor
-    above: "{{ temperature_high }}"
 
 action:
   - choose:
+      # Day schedule logic
       - conditions:
-          - condition: numeric_state
-            entity_id: !input temperature_sensor
-            above: "{{ temperature_high | float }}"
           - condition: time
             after: !input day_time_start
             before: !input day_time_end
         sequence:
-          - service: switch.turn_on
-            target:
-              entity_id: !input ac_outlet
-      
-      - conditions:
-          - condition: numeric_state
-            entity_id: !input temperature_sensor
-            below: "{{ temperature_low | float }}"
-          - condition: time
-            after: !input day_time_start
-            before: !input day_time_end
-        sequence:
-          - service: switch.turn_off
-            target:
-              entity_id: !input ac_outlet
-              
-      - conditions:
-          - condition: numeric_state
-            entity_id: !input temperature_sensor
-            above: "{{ temperature_high | float }}"
-          - condition: time
-            after: !input night_time_start
-            before: !input night_time_end
-        sequence:
-          - service: switch.turn_on
-            target:
-              entity_id: !input ac_outlet
-      
-      - conditions:
-          - condition: numeric_state
-            entity_id: !input temperature_sensor
-            below: "{{ temperature_low | float }}"
-          - condition: time
-            after: !input night_time_start
-            before: !input night_time_end
-        sequence:
-          - service: switch.turn_off
-            target:
-              entity_id: !input ac_outlet
+          - choose:
+              - conditions:
+                  - condition: numeric_state
+                    entity_id: !input temperature_sensor
+                    above: !input day_temperature_high
+                sequence:
+                  - service: switch.turn_on
+                    target:
+                      entity_id: !input ac_outlet
+              - conditions:
+                  - condition: numeric_state
+                    entity_id: !input temperature_sensor
+                    below: !input day_temperature_low
+                sequence:
+                  - service: switch.turn_off
+                    target:
+                      entity_id: !input ac_outlet
 
+      # Night schedule logic
+      - conditions:
+          - condition: template
+            value_template: >
+              {% set start_time = night_time_start.split(':') | map('int') | list %}
+              {% set end_time = night_time_end.split(':') | map('int') | list %}
+              {% set now = now().hour * 60 + now().minute %}
+              {% set start = start_time[0] * 60 + start_time[1] %}
+              {% set end = end_time[0] * 60 + end_time[1] %}
+              
+              {% if start < end %}
+                {# Normal time range (e.g., 9pm to 11pm) #}
+                {{ now > start and now < end }}
+              {% else %}
+                {# Midnight crossover (e.g., 10pm to 7am) #}
+                {{ now > start or now < end }}
+              {% endif %}
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: numeric_state
+                    entity_id: !input temperature_sensor
+                    above: !input night_temperature_high
+                sequence:
+                  - service: switch.turn_on
+                    target:
+                      entity_id: !input ac_outlet
+              - conditions:
+                  - condition: numeric_state
+                    entity_id: !input temperature_sensor
+                    below: !input night_temperature_low
+                sequence:
+                  - service: switch.turn_off
+                    target:
+                      entity_id: !input ac_outlet
